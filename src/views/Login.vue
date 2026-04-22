@@ -38,8 +38,10 @@ import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage, NForm, NFormItem, NInput, NButton, NText } from 'naive-ui'
 
-// 这里设置你的访问密码（可以改成你想要的任意密码）
-const ACCESS_PASSWORD = 'yngzzjy'  // ← 修改成你想要的密码
+// 👇 每次修改密码后，把这个版本号+1
+const PASSWORD_VERSION = 1  // 改成2（之前是1的话）
+
+const ACCESS_PASSWORD = 'yngzzjy'  // 你的新密码
 
 const router = useRouter()
 const route = useRoute()
@@ -60,16 +62,15 @@ const handleLogin = async () => {
     await formRef.value?.validate()
     loading.value = true
     
-    // 模拟验证延迟
     await new Promise(resolve => setTimeout(resolve, 500))
     
     if (form.password === ACCESS_PASSWORD) {
-      // 保存登录状态
+      // 👇 保存登录状态和版本号
       localStorage.setItem('site_auth_token', 'authenticated')
+      localStorage.setItem('password_version', PASSWORD_VERSION.toString())
       
       message.success('登录成功')
       
-      // 跳转到之前想去的页面，如果没有则跳转首页
       const redirect = route.query.redirect || '/'
       router.push(redirect)
     } else {
