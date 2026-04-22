@@ -39,7 +39,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useMessage, NForm, NFormItem, NInput, NButton, NText } from 'naive-ui'
 
 // 这里设置你的访问密码（可以改成你想要的任意密码）
-const ACCESS_PASSWORD = 'hjgyjhgr'  // ← 修改成你想要的密码
+const ACCESS_PASSWORD = 'yngzzjy'  // ← 修改成你想要的密码
 
 const router = useRouter()
 const route = useRoute()
