@@ -41,6 +41,18 @@ const my_routes = [
       requiresToken: false,
       requiresAuth: true
     },
+	{
+    path: '/game',
+    name: 'GamePlayer',
+    component: () => import('@/views/GamePlayer.vue'),
+    meta: {
+      title: '游戏',
+      requiresToken: true
+    },
+    props: route => ({
+      bin_id: route.query.bin_id
+    })
+  },
     props: route => ({
       token: route.query.token,
       name: route.query.name,
@@ -126,7 +138,16 @@ const my_routes = [
           title: '批量日常',
           requiresToken: true,
           requiresAuth: true
+        },
+	  {
+        path: 'PushingLevels',
+        name: 'PushingLevels',
+        component: () => import('@/views/PushingLevels.vue'),
+        meta: {
+          title: '主线推关',
+          requiresToken: true
         }
+      }
       },
       ...generatedRoutes,
     ]
