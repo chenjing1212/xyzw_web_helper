@@ -5,13 +5,11 @@ import { isNowInLegionWarTime } from "@/utils/clubBattleUtils"
 
 const generatedRoutes = autoRoutes.routes ?? [];
 
-
 // ========== 密码版本配置 ==========
 const CURRENT_PASSWORD_VERSION = 1  // 和Login.vue保持一致
 
 // ========== 修复：移除会导致循环重载的 checkPasswordVersion ==========
 // 直接使用 isAuthenticated 进行版本检查即可
-
 
 const my_routes = [
   {
@@ -207,7 +205,8 @@ autoRoutes.handleHotUpdate?.(router);
 const isAuthenticated = () => {
   const authToken = localStorage.getItem('site_auth_token')
   const savedVersion = localStorage.getItem('password_version')
-
+  
+  // 只有在有token且版本号匹配时才认为是已登录
   return authToken === 'authenticated' && savedVersion === String(CURRENT_PASSWORD_VERSION)
 }
 
@@ -223,28 +222,31 @@ router.beforeEach((to, from, next) => {
     next('/admin/dashboard');
     return;
   }
-
+  
   // ========== 修复：移除会导致循环重载的 checkPasswordVersion ==========
   // 不再调用 checkPasswordVersion，因为它会导致无限刷新
   // 版本不匹配的用户会在 isAuthenticated() 中被识别为未登录
   
-  // 登录密码保护 - 需要认证且未登录则跳转登录页
-  if (to.meta.requiresAuth === true && !isAuthenticated()) {
+  // 登录密码保护
+  const requiresAuth = to.meta.requiresAuth === true
+  
+  if (requiresAuth && !isAuthenticated()) {
+    // 版本不匹配的用户会走到这里，被重定向到登录页
     next({
       path: '/login',
       query: { redirect: to.fullPath }
     })
     return
   }
-
+  
   // 如果已登录但访问登录页，跳转到首页
   if (to.path === '/login' && isAuthenticated()) {
     next('/')
     return
   }
-
-  // 检查是否需要Token - 需要Token但无Token则跳转Token导入页
-  if (to.meta.requiresToken === true && !tokenStore.hasTokens) {
+  
+  // 原有的 Token 检查逻辑
+  if (to.meta.requiresToken && !tokenStore.hasTokens) {
     next('/tokens')
     return
   }
