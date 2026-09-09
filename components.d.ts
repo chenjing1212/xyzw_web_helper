@@ -8,6 +8,17 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ABadge: typeof import('@arco-design/web-vue')['Badge']
+    AButton: typeof import('@arco-design/web-vue')['Button']
+    ACard: typeof import('@arco-design/web-vue')['Card']
+    ADatePicker: typeof import('@arco-design/web-vue')['DatePicker']
+    AEmpty: typeof import('@arco-design/web-vue')['Empty']
+    AList: typeof import('@arco-design/web-vue')['List']
+    AListItem: typeof import('@arco-design/web-vue')['ListItem']
+    AModal: typeof import('@arco-design/web-vue')['Modal']
+    ASpace: typeof import('@arco-design/web-vue')['Space']
+    ATag: typeof import('@arco-design/web-vue')['Tag']
+    AUpload: typeof import('@arco-design/web-vue')['Upload']
     BossTower: typeof import('./src/components/Tower/BossTower.vue')['default']
     BottleHelperCard: typeof import('./src/components/cards/BottleHelperCard.vue')['default']
     BoxHelperCard: typeof import('./src/components/cards/BoxHelperCard.vue')['default']
