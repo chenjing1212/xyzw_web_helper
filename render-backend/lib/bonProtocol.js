@@ -1,21 +1,22 @@
 /**
- * BON (Binary Object Notation) 协议实现
- * 基于提供的真实 BON 源码重新实现
+ * BON (Binary Object Notation) 协议实现 - Node.js 适配版
+ * 基于 HuskyHappy/xyzw_web_helper 的 bonProtocol.js
+ * 改动：import→require, export→module.exports
  */
-import lz4 from "lz4js";
+import lz4 from "lz4js"; 
 
 // -----------------------------
 // BON 编解码器核心实现
 // -----------------------------
 
-export class Int64 {
+class Int64 {
   constructor(high, low) {
     this.high = high;
     this.low = low;
   }
 }
 
-export class DataReader {
+class DataReader {
   constructor(bytes) {
     this._data = bytes || new Uint8Array(0);
     this._view = null;
@@ -44,7 +45,6 @@ export class DataReader {
 
   validate(n) {
     if (this.position + n > this._data.length) {
-      console.error("read eof");
       return false;
     }
     return true;
@@ -135,9 +135,9 @@ export class DataReader {
   }
 }
 
-let _shared = new Uint8Array(524288); // 512 KB initial buffer
+let _shared = new Uint8Array(524288);
 
-export class DataWriter {
+class DataWriter {
   constructor() {
     this.position = 0;
     this._view = null;
@@ -294,7 +294,7 @@ export class DataWriter {
   }
 }
 
-export class BonEncoder {
+class BonEncoder {
   constructor() {
     this.dw = new DataWriter();
     this.strMap = new Map();
@@ -339,11 +339,11 @@ export class BonEncoder {
   encodeString(s) {
     const hit = this.strMap.get(s);
     if (hit !== undefined) {
-      this.dw.writeInt8(99); // StringRef
+      this.dw.writeInt8(99);
       this.dw.write7BitInt(hit);
       return;
     }
-    this.dw.writeInt8(5); // String
+    this.dw.writeInt8(5);
     this.dw.writeUTF(s);
     this.strMap.set(s, this.strMap.size);
   }
@@ -445,7 +445,7 @@ export class BonEncoder {
   }
 }
 
-export class BonDecoder {
+class BonDecoder {
   constructor() {
     this.dr = new DataReader(new Uint8Array(0));
     this.strArr = [];
@@ -504,12 +504,10 @@ export class BonDecoder {
   }
 }
 
-// 单例实例
 const _enc = new BonEncoder();
 const _dec = new BonDecoder();
 
-// BON 编解码函数
-export const bon = {
+const bon = {
   encode: (value, clone = true) => {
     _enc.reset();
     _enc.encode(value);
@@ -521,96 +519,7 @@ export const bon = {
   },
 };
 
-/** —— 协议消息包装，与原 ProtoMsg 类等价 盐场版本—— */
-export class ProtoMsgLegion {
-  constructor(raw) {
-    if (raw?.cmd) {
-      raw.cmd = raw.cmd.toLowerCase();
-    }
-    this._raw = raw;
-    this._rawData = undefined;
-    this._data = undefined;
-    this._t = undefined;
-    this._sendMsg = undefined;
-    this.rtt = 0;
-  }
-
-  get sendMsg() {
-    return this._sendMsg;
-  }
-  get seq() {
-    return this._raw.seq;
-  }
-  get resp() {
-    return this._raw.resp;
-  }
-  get ack() {
-    return this._raw.ack;
-  }
-  get cmd() {
-    return this._raw?.cmd && this._raw?.cmd.toLowerCase();
-  }
-  get code() {
-    return ~~this._raw.code;
-  }
-  get error() {
-    return this._raw.error;
-  }
-  get time() {
-    return this._raw.time;
-  }
-  get body() {
-    return this._raw.body;
-  }
-  get hint() {
-    return this._raw.hint;
-  }
-
-  /** 惰性 decode body → rawData（bon.decode） */
-  get rawData() {
-    if (this._rawData !== undefined || this.body === undefined)
-      return this._rawData;
-    this._rawData = bon.decode(this.body);
-    return this._rawData;
-  }
-
-  /** 指定数据类型 */
-  setDataType(t) {
-    if (t) this._t = { name: t.name ?? "Anonymous", ctor: t };
-    return this;
-  }
-
-  /** 配置"请求"对象，让 respType 自动对齐 */
-  setSendMsg(msg) {
-    this._sendMsg = msg;
-    return this.setDataType(msg.respType);
-  }
-
-  /** 将 rawData 反序列化为业务对象 */
-  getData(clazz) {
-    if (this._data !== undefined || this.rawData === undefined)
-      return this._data;
-
-    let t = this._t;
-    if (clazz && t && clazz !== t.ctor) {
-      console.warn(`getData type not match, ${clazz.name} != ${t.name}`);
-      t = { name: clazz.name, ctor: clazz };
-    }
-
-    this._data = this.rawData;
-    return this._data;
-  }
-
-  toLogString() {
-    const e = { ...this._raw };
-    delete e.body;
-    e.data = this.rawData;
-    e.rtt = this.rtt;
-    return JSON.stringify(e);
-  }
-}
-
-export class ProtoMsg {
+class ProtoMsg {
   constructor(raw) {
     if (raw?.cmd) {
       raw.cmd = raw.cmd.toLowerCase();
@@ -651,7 +560,6 @@ export class ProtoMsg {
     return this._raw.body;
   }
 
-  /** 惰性 decode body → rawData（bon.decode） */
   get rawData() {
     if (this._rawData !== undefined || this.body === undefined)
       return this._rawData;
@@ -659,29 +567,23 @@ export class ProtoMsg {
     return this._rawData;
   }
 
-  /** 指定数据类型 */
   setDataType(t) {
     if (t) this._t = { name: t.name ?? "Anonymous", ctor: t };
     return this;
   }
 
-  /** 配置"请求"对象，让 respType 自动对齐 */
   setSendMsg(msg) {
     this._sendMsg = msg;
     return this.setDataType(msg.respType);
   }
 
-  /** 将 rawData 反序列化为业务对象 */
   getData(clazz) {
     if (this._data !== undefined || this.rawData === undefined)
       return this._data;
-
     let t = this._t;
     if (clazz && t && clazz !== t.ctor) {
-      console.warn(`getData type not match, ${clazz.name} != ${t.name}`);
       t = { name: clazz.name, ctor: clazz };
     }
-
     this._data = this.rawData;
     return this._data;
   }
@@ -695,17 +597,15 @@ export class ProtoMsg {
   }
 }
 
-/** —— 加解密器注册表 —— */
+// —— 加解密器注册表 ——
 const registry = new Map();
 
-/** lz4 + 头部掩码的 "lx" 方案 */
+// lz4 + 头部掩码
 const lx = {
   encrypt: (buf) => {
     let e = lz4.compress(buf);
     const t = 2 + ~~(Math.random() * 248);
     for (let n = Math.min(e.length, 100); --n >= 0; ) e[n] ^= t;
-
-    // 写入标识与混淆位
     e[0] = 112;
     e[1] = 108;
     e[2] =
@@ -736,12 +636,12 @@ const lx = {
     e[0] = 4;
     e[1] = 34;
     e[2] = 77;
-    e[3] = 24; // 还原头以便 lz4 解
+    e[3] = 24;
     return lz4.decompress(e);
   },
 };
 
-/** 随机首 4 字节 + XOR 的 "x" 方案 */
+// 随机首 4 字节 + XOR
 const x = {
   encrypt: (e) => {
     const rnd = ~~(Math.random() * 0xffffffff) >>> 0;
@@ -784,7 +684,7 @@ const x = {
   },
 };
 
-/** 依赖 globalThis.XXTEA 的 "xtm" 方案 */
+// XXTEA (如果 globalThis.XXTEA 存在)
 const xtm = {
   encrypt: (e) =>
     globalThis.XXTEA
@@ -796,7 +696,6 @@ const xtm = {
       : e,
 };
 
-/** 注册器 */
 function register(name, impl) {
   registry.set(name, impl);
 }
@@ -805,7 +704,6 @@ register("lx", lx);
 register("x", x);
 register("xtm", xtm);
 
-/** 默认使用 x 加密（自动检测解密） */
 const passthrough = {
   encrypt: (e) => getEnc("x").encrypt(e),
   decrypt: (e) => {
@@ -819,194 +717,44 @@ const passthrough = {
   },
 };
 
-/** 对外：按名称取加解密器；找不到则用默认 */
-export function getEnc(name) {
+function getEnc(name) {
   return registry.get(name) ?? passthrough;
 }
 
-/** 对外：encode（bon.encode → 加密） */
-export function encode(obj, enc) {
+function encode(obj, enc) {
   let bytes = bon.encode(obj, false);
   const out = enc.encrypt(bytes);
-  return out.buffer.byteLength === out.length && out.byteOffset === 0
+  return out.buffer.byteLength === out.length
     ? out.buffer
-    : out.buffer.slice(out.byteOffset, out.byteOffset + out.length);
+    : out.buffer.slice(0, out.length);
 }
 
-/** 对外：parse（解密 → bon.decode → ProtoMsg） */
-export function parse(buf, enc, isLegion = false) {
-  if (!isLegion) {
-    const u8 = new Uint8Array(buf);
-    const plain = enc.decrypt(u8);
-    const raw = bon.decode(plain);
-    return new ProtoMsg(raw);
-  } else {
-    return parseLegion(buf, enc, true);
-  }
-}
-
-/** 对外：parse（解密 → bon.decode → ProtoMsg） 返回的消息体是盐场版本的消息体*/
-function parseLegion(buf, enc, isLegion) {
+function parse(buf, enc) {
   const u8 = new Uint8Array(buf);
   const plain = enc.decrypt(u8);
   const raw = bon.decode(plain);
-  return new ProtoMsgLegion(raw);
+  return new ProtoMsg(raw);
 }
 
-// 游戏消息模板
-export const GameMessages = {
-  // 心跳消息
-  heartBeat: (ack = 0, seq = 0) => ({
-    ack,
-    body: undefined,
-    c: undefined,
-    cmd: "_sys/ack",
-    hint: undefined,
-    seq,
-    time: Date.now(),
-  }),
-
-  // 获取角色信息
-  getRoleInfo: (ack = 0, seq = 0, params = {}) => ({
-    cmd: "role_getroleinfo",
-    body: encode(
-      {
-        clientVersion: "2.43.4-a7db1319a3025acb-wx",
-        inviteUid: 0,
-        platform: "hortor",
-        platformExt: "mix",
-        scene: "",
-        ...params,
-      },
-      getEnc("x"),
-    ),
-    ack: ack || 0,
-    seq: seq || 0,
-    time: Date.now(),
-  }),
-
-  // 获取数据包版本
-  getDataBundleVer: (ack = 0, seq = 0, params = {}) => ({
-    cmd: "system_getdatabundlever",
-    body: encode(
-      {
-        isAudit: false,
-        ...params,
-      },
-      getEnc("x"),
-    ),
-    ack: ack || 0,
-    seq: seq || 0,
-    time: Date.now(),
-  }),
-
-  // 购买金币
-  buyGold: (ack = 0, seq = 0, params = {}) => ({
-    ack,
-    body: encode(
-      {
-        buyNum: 1,
-        ...params,
-      },
-      getEnc("x"),
-    ),
-    cmd: "system_buygold",
-    seq,
-    time: Date.now(),
-  }),
-
-  // 签到奖励
-  signInReward: (ack = 0, seq = 0, params = {}) => ({
-    ack,
-    body: encode(
-      {
-        ...params,
-      },
-      getEnc("x"),
-    ),
-    cmd: "system_signinreward",
-    seq,
-    time: Date.now(),
-  }),
-
-  // 领取每日任务奖励
-  claimDailyReward: (ack = 0, seq = 0, params = {}) => ({
-    ack,
-    body: encode(
-      {
-        rewardId: 0,
-        ...params,
-      },
-      getEnc("x"),
-    ),
-    cmd: "task_claimdailyreward",
-    seq,
-    time: Date.now(),
-  }),
-};
-
-// 创建全局实例
-export const g_utils = {
+const g_utils = {
   getEnc,
   encode: (obj, encName = "x") => encode(obj, getEnc(encName)),
   parse: (data, encName = "auto") => parse(data, getEnc(encName)),
-  bon, // 添加BON编解码器
-};
-
-// 兼容性导出（保持旧的接口）
-export const bonProtocol = {
-  encode: bon.encode,
-  decode: bon.decode,
-  createMessage: (cmd, body = {}, ack = 0, seq = 0, options = {}) => ({
-    cmd,
-    body: bon.encode(body),
-    ack: ack || 0,
-    seq: seq || 0,
-    time: Date.now(),
-    ...options,
-  }),
-  parseMessage: (messageData) => {
-    try {
-      let message;
-      if (typeof messageData === "string") {
-        message = JSON.parse(messageData);
-      } else {
-        message = messageData;
-      }
-      if (
-        message.body &&
-        (message.body instanceof ArrayBuffer ||
-          message.body instanceof Uint8Array)
-      ) {
-        message.body = bon.decode(message.body);
-      }
-      return message;
-    } catch (error) {
-      console.error("消息解析失败:", error);
-      return {
-        error: true,
-        message: "消息解析失败",
-        originalData: messageData,
-      };
-    }
-  },
-  generateSeq: () => Math.floor(Math.random() * 1000000),
-  generateMessageId: () =>
-    "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
-};
-
-// 导出单独的加密器类以兼容测试文件
-export const LXCrypto = lx;
-export const XCrypto = x;
-export const XTMCrypto = xtm;
-
-export default {
-  ProtoMsg,
-  getEnc,
-  encode,
-  parse,
-  GameMessages,
-  g_utils,
   bon,
-  bonProtocol,
 };
+
+export {
+ Int64,
+ DataReader,
+ DataWriter,
+ BonEncoder,
+ BonDecoder,
+ ProtoMsg,
+ bon,
+ getEnc,
+ encode,
+ parse,
+ g_utils,
+};
+
+

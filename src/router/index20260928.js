@@ -5,8 +5,13 @@ import { isNowInLegionWarTime } from "@/utils/clubBattleUtils"
 
 const generatedRoutes = autoRoutes.routes ?? [];
 
-// 密码版本配置，需与 Login.vue 保持一致
-const CURRENT_PASSWORD_VERSION = 1
+
+// ========== 密码版本配置 ==========
+const CURRENT_PASSWORD_VERSION = 1  // 和Login.vue保持一致
+
+// ========== 修复：移除会导致循环重载的 checkPasswordVersion ==========
+// 直接使用 isAuthenticated 进行版本检查即可
+
 
 const my_routes = [
   {
@@ -47,7 +52,7 @@ const my_routes = [
       auto: route.query.auto === 'true'
     })
   },
-  {
+	{
     path: '/game',
     name: 'GamePlayer',
     component: () => import('@/views/GamePlayer.vue'),
@@ -58,15 +63,6 @@ const my_routes = [
     props: route => ({
       bin_id: route.query.bin_id
     })
-  },
-  {
-    path: '/multi-game',
-    name: 'GameMultiPlayer',
-    component: () => import('@/views/GameMultiPlayer.vue'),
-    meta: {
-      title: '批量游戏',
-      requiresToken: true
-    }
   },
   {
     name: 'DefaultLayout',
@@ -146,7 +142,7 @@ const my_routes = [
           requiresAuth: true
         }
       },
-      {
+	  {
         path: 'PushingLevels',
         name: 'PushingLevels',
         component: () => import('@/views/PushingLevels.vue'),
@@ -155,7 +151,6 @@ const my_routes = [
           requiresToken: true
         }
       },
-      // 增加自动路由引用
       ...generatedRoutes,
     ]
   },
@@ -169,7 +164,6 @@ const my_routes = [
       requiresAuth: true
     }
   },
-  // 兼容旧路由，重定向到新的token管理页面
   {
     path: '/old-login',
     redirect: '/tokens'
@@ -182,7 +176,6 @@ const my_routes = [
     path: '/game-roles',
     redirect: '/tokens'
   },
-  // 增加自动路由引用
   ...generatedRoutes,
   {
     path: '/:pathMatch(.*)*',
@@ -210,6 +203,7 @@ const router = createRouter({
 // 热更新路由
 autoRoutes.handleHotUpdate?.(router);
 
+// 检查是否已登录的辅助函数（已包含版本检查）
 const isAuthenticated = () => {
   const authToken = localStorage.getItem('site_auth_token')
   const savedVersion = localStorage.getItem('password_version')
@@ -220,15 +214,21 @@ const isAuthenticated = () => {
 // 导航守卫
 router.beforeEach((to, from, next) => {
   const tokenStore = useTokenStore()
-
+  
   // 设置页面标题
   document.title = to.meta.title ? `${to.meta.title} - XYZW 游戏管理系统` : 'XYZW 游戏管理系统'
-  if(to.name==="LegionWar"&&!isNowInLegionWarTime()){
-  // if(to.name==="LegionWar"&&isNowInLegionWarTime()){
+  
+  // 盐场时间判断
+  if (to.name === "LegionWar" && !isNowInLegionWarTime()) {
     next('/admin/dashboard');
     return;
   }
 
+  // ========== 修复：移除会导致循环重载的 checkPasswordVersion ==========
+  // 不再调用 checkPasswordVersion，因为它会导致无限刷新
+  // 版本不匹配的用户会在 isAuthenticated() 中被识别为未登录
+  
+  // 登录密码保护 - 需要认证且未登录则跳转登录页
   if (to.meta.requiresAuth === true && !isAuthenticated()) {
     next({
       path: '/login',
@@ -237,29 +237,29 @@ router.beforeEach((to, from, next) => {
     return
   }
 
+  // 如果已登录但访问登录页，跳转到首页
   if (to.path === '/login' && isAuthenticated()) {
     next('/')
     return
   }
 
-  // 检查是否需要Token
-  // if (to.meta.requiresToken  && tokenStore.getWebSocketStatus(tokenStore.selectedToken.id)=="disconnected") {
+  // 检查是否需要Token - 需要Token但无Token则跳转Token导入页
   if (to.meta.requiresToken === true && !tokenStore.hasTokens) {
     next('/tokens')
     return
-  } else if (to.path === '/' && tokenStore.hasTokens) {
-    // 首页重定向逻辑
+  }
+  
+  // 首页重定向逻辑
+  if (to.path === '/' && tokenStore.hasTokens) {
     if (tokenStore.selectedToken) {
       next('/admin/dashboard')
     } else {
       next('/tokens')
     }
     return
-  } else {
-    next()
   }
+  
+  next()
 })
-
-
 
 export default router
