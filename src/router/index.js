@@ -1,265 +1,255 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from "vue-router";
 import * as autoRoutes from "vue-router/auto-routes";
-import { useTokenStore } from '@/stores/tokenStore'
-import { isNowInLegionWarTime } from "@/utils/clubBattleUtils"
+import { useTokenStore } from "@/stores/tokenStore";
+import { isNowInLegionWarTime } from "@/utils/clubBattleUtils";
 
 const generatedRoutes = autoRoutes.routes ?? [];
 
 // 密码版本配置，需与 Login.vue 保持一致
-const CURRENT_PASSWORD_VERSION = 1
+const CURRENT_PASSWORD_VERSION = 1;
 
 const my_routes = [
   {
-    path: '/',
-    name: 'Home',
-    component: () => import('@/views/Home.vue'),
+    path: "/",
+    name: "Home",
+    component: () => import("@/views/Home.vue"),
     meta: {
-      title: '首页',
+      title: "首页",
       requiresToken: false,
-      requiresAuth: false
-    }
-  },
-  {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/Login.vue'),
-    meta: {
-      title: '登录',
-      requiresToken: false,
-      requiresAuth: false
-    }
-  },
-  {
-    path: '/tokens',
-    name: 'TokenImport',
-    component: () => import('@/views/TokenImport/index.vue'),
-    meta: {
-      title: 'Token管理',
-      requiresToken: false,
-      requiresAuth: true
+      requiresAuth: false,
     },
-    props: route => ({
+  },
+  {
+    path: "/login",
+    name: "Login",
+    component: () => import("@/views/Login.vue"),
+    meta: {
+      title: "登录",
+      requiresToken: false,
+      requiresAuth: false,
+    },
+  },
+  {
+    path: "/tokens",
+    name: "TokenImport",
+    component: () => import("@/views/TokenImport/TokenImport.vue"),
+    meta: {
+      title: "Token管理",
+      requiresToken: false,
+      requiresAuth: true,
+    },
+    props: (route) => ({
       token: route.query.token,
       name: route.query.name,
       server: route.query.server,
       wsUrl: route.query.wsUrl,
       api: route.query.api,
-      auto: route.query.auto === 'true'
-    })
+      auto: route.query.auto === "true",
+    }),
   },
   {
-    path: '/game',
-    name: 'GamePlayer',
-    component: () => import('@/views/GamePlayer.vue'),
+    path: "/game",
+    name: "GamePlayer",
+    component: () => import("@/views/GamePlayer.vue"),
     meta: {
-      title: '游戏',
-      requiresToken: true
+      title: "游戏",
+      requiresToken: true,
     },
-    props: route => ({
-      bin_id: route.query.bin_id
-    })
+    props: (route) => ({
+      bin_id: route.query.bin_id,
+    }),
   },
   {
-    path: '/multi-game',
-    name: 'GameMultiPlayer',
-    component: () => import('@/views/GameMultiPlayer.vue'),
+    path: "/multi-game",
+    name: "GameMultiPlayer",
+    component: () => import("@/views/GameMultiPlayer.vue"),
     meta: {
-      title: '批量游戏',
-      requiresToken: true
-    }
+      title: "批量游戏",
+      requiresToken: true,
+    },
   },
   {
-    name: 'DefaultLayout',
-    path: '/admin',
-    component: () => import('@/layout/DefaultLayout.vue'),
+    name: "DefaultLayout",
+    path: "/admin",
+    component: () => import("@/layout/DefaultLayout.vue"),
     meta: {
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/Dashboard.vue'),
+        path: "dashboard",
+        name: "Dashboard",
+        component: () => import("@/views/Dashboard.vue"),
         meta: {
-          title: '控制台',
+          title: "控制台",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'game-features',
-        name: 'GameFeatures',
-        component: () => import('@/views/GameFeatures.vue'),
+        path: "game-features",
+        name: "GameFeatures",
+        component: () => import("@/views/GameFeatures.vue"),
         meta: {
-          title: '游戏功能',
+          title: "游戏功能",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'message-test',
-        name: 'MessageTest',
-        component: () => import('@/components/Test/MessageTester.vue'),
+        path: "message-test",
+        name: "MessageTest",
+        component: () => import("@/components/Test/MessageTester.vue"),
         meta: {
-          title: '消息测试',
+          title: "消息测试",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'legion-war',
-        name: 'LegionWar',
-        component: () => import('@/views/LegionWar.vue'),
+        path: "legion-war",
+        name: "LegionWar",
+        component: () => import("@/views/LegionWar.vue"),
         meta: {
-          title: '实时盐场',
+          title: "实时盐场",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'profile',
-        name: 'Profile',
-        component: () => import('@/views/Profile.vue'),
+        path: "profile",
+        name: "Profile",
+        component: () => import("@/views/Profile.vue"),
         meta: {
-          title: '个人设置',
+          title: "个人设置",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'daily-tasks',
-        name: 'DailyTasks',
-        component: () => import('@/views/DailyTasks.vue'),
+        path: "daily-tasks",
+        name: "DailyTasks",
+        component: () => import("@/views/DailyTasks.vue"),
         meta: {
-          title: '日常任务',
+          title: "日常任务",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'batch-daily-tasks',
-        name: 'BatchDailyTasks',
-        component: () => import('@/views/BatchDailyTasks.vue'),
+        path: "batch-daily-tasks",
+        name: "BatchDailyTasks",
+        component: () => import("@/views/BatchDailyTasks.vue"),
         meta: {
-          title: '批量日常',
+          title: "批量日常",
           requiresToken: true,
-          requiresAuth: true
-        }
+        },
       },
       {
-        path: 'PushingLevels',
-        name: 'PushingLevels',
-        component: () => import('@/views/PushingLevels.vue'),
+        path: "PushingLevels",
+        name: "PushingLevels",
+        component: () => import("@/views/PushingLevels.vue"),
         meta: {
-          title: '主线推关',
-          requiresToken: true
-        }
+          title: "主线推关",
+          requiresToken: true,
+        },
       },
       // 增加自动路由引用
       ...generatedRoutes,
-    ]
+    ],
   },
   {
-    path: '/websocket-test',
-    name: 'WebSocketTest',
-    component: () => import('@/components/Test/WebSocketTester.vue'),
+    path: "/websocket-test",
+    name: "WebSocketTest",
+    component: () => import("@/components/Test/WebSocketTester.vue"),
     meta: {
-      title: 'WebSocket测试',
+      title: "WebSocket测试",
       requiresToken: true,
-      requiresAuth: true
-    }
+      requiresAuth: true,
+    },
   },
   // 兼容旧路由，重定向到新的token管理页面
   {
-    path: '/old-login',
-    redirect: '/tokens'
+    path: "/register",
+    redirect: "/tokens",
   },
   {
-    path: '/register',
-    redirect: '/tokens'
-  },
-  {
-    path: '/game-roles',
-    redirect: '/tokens'
+    path: "/game-roles",
+    redirect: "/tokens",
   },
   // 增加自动路由引用
   ...generatedRoutes,
   {
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    component: () => import('@/views/NotFound.vue'),
+    path: "/:pathMatch(.*)*",
+    name: "NotFound",
+    component: () => import("@/views/NotFound.vue"),
     meta: {
-      title: '页面不存在',
-      requiresAuth: false
-    }
-  }
-]
+      title: "页面不存在",
+      requiresAuth: false,
+    },
+  },
+];
 
 const router = createRouter({
   history: createWebHistory(),
   routes: my_routes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
-      return savedPosition
+      return savedPosition;
     } else {
-      return { top: 0 }
+      return { top: 0 };
     }
-  }
-})
+  },
+});
 
 // 热更新路由
 autoRoutes.handleHotUpdate?.(router);
 
 const isAuthenticated = () => {
-  const authToken = localStorage.getItem('site_auth_token')
-  const savedVersion = localStorage.getItem('password_version')
+  const authToken = localStorage.getItem("site_auth_token");
+  const savedVersion = localStorage.getItem("password_version");
 
-  return authToken === 'authenticated' && savedVersion === String(CURRENT_PASSWORD_VERSION)
-}
+  return (
+    authToken === "authenticated" &&
+    savedVersion === String(CURRENT_PASSWORD_VERSION)
+  );
+};
 
 // 导航守卫
 router.beforeEach((to, from, next) => {
-  const tokenStore = useTokenStore()
+  const tokenStore = useTokenStore();
 
   // 设置页面标题
-  document.title = to.meta.title ? `${to.meta.title} - XYZW 游戏管理系统` : 'XYZW 游戏管理系统'
-  if(to.name==="LegionWar"&&!isNowInLegionWarTime()){
-  // if(to.name==="LegionWar"&&isNowInLegionWarTime()){
-    next('/admin/dashboard');
+  document.title = to.meta.title
+    ? `${to.meta.title} - XYZW 游戏管理系统`
+    : "XYZW 游戏管理系统";
+  if (to.name === "LegionWar" && !isNowInLegionWarTime()) {
+    next("/admin/dashboard");
     return;
   }
 
   if (to.meta.requiresAuth === true && !isAuthenticated()) {
     next({
-      path: '/login',
-      query: { redirect: to.fullPath }
-    })
-    return
+      path: "/login",
+      query: { redirect: to.fullPath },
+    });
+    return;
   }
 
-  if (to.path === '/login' && isAuthenticated()) {
-    next('/')
-    return
+  if (to.path === "/login" && isAuthenticated()) {
+    next("/");
+    return;
   }
 
   // 检查是否需要Token
-  // if (to.meta.requiresToken  && tokenStore.getWebSocketStatus(tokenStore.selectedToken.id)=="disconnected") {
   if (to.meta.requiresToken === true && !tokenStore.hasTokens) {
-    next('/tokens')
-    return
-  } else if (to.path === '/' && tokenStore.hasTokens) {
+    next("/tokens");
+    return;
+  } else if (to.path === "/" && tokenStore.hasTokens) {
     // 首页重定向逻辑
     if (tokenStore.selectedToken) {
-      next('/admin/dashboard')
+      next("/admin/dashboard");
     } else {
-      next('/tokens')
+      next("/tokens");
     }
-    return
+    return;
   } else {
-    next()
+    next();
   }
-})
+});
 
-
-
-export default router
+export default router;
