@@ -5,6 +5,17 @@ const activeTokenRuns = new Set();
 const HANG_UP_HELP_SLOTS = 4;
 
 /**
+ * Build the same-origin URL served by the Vite/Cloudflare game-config proxy.
+ * @param {string} version Server-provided immutable data bundle version.
+ * @returns {string} Safe same-origin config URL.
+ */
+export function getDailyTaskConfigUrl(version) {
+  if (typeof version !== "string" || !/^[\w-]+$/.test(version))
+    throw new Error("服务器未提供有效的任务配置版本");
+  return `/api/game-config/data/${version}/config.json`;
+}
+
+/**
  * Keep daily and hang-up operations for one account from overlapping.
  * @param {string} tokenId Account identity.
  * @param {Function} execute Operation to execute once.
@@ -169,17 +180,48 @@ export async function loadDailyTaskConfig(
     15000,
   );
   const version = response?.dataBundleVer;
-  if (typeof version !== "string" || !/^[\w-]+$/.test(version))
-    throw new Error("服务器未提供有效的任务配置版本");
+  const configUrl = getDailyTaskConfigUrl(version);
   if (!configsByVersion.has(version)) {
     const loading = (async () => {
-      const response = await fetchConfig(
-        `https://xxz-xyzw-res.hortorgames.com/data/${version}/config.json`,
-        { signal: AbortSignal.timeout(30000) },
-      );
-      if (!response.ok) throw new Error("官方任务配置读取失败");
-      const config = await response.json();
-      return validateDailyTaskConfig(config);
+      let configResponse;
+      try {
+        configResponse = await fetchConfig(configUrl, {
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (error) {
+        throw new Error(
+          `官方任务配置网络请求失败（版本 ${version}）：${error.message}`,
+        );
+      }
+      if (!configResponse.ok) {
+        const status = Number.isInteger(configResponse.status)
+          ? configResponse.status
+          : "未知";
+        const reason =
+          status === 403
+            ? "上游拒绝访问"
+            : status === 404
+              ? "该版本配置不存在"
+              : "上游响应异常";
+        throw new Error(
+          `官方任务配置读取失败（版本 ${version}，HTTP ${status}，${reason}）`,
+        );
+      }
+      let config;
+      try {
+        config = await configResponse.json();
+      } catch (error) {
+        throw new Error(
+          `官方任务配置 JSON 解析失败（版本 ${version}）：${error.message}`,
+        );
+      }
+      try {
+        return validateDailyTaskConfig(config);
+      } catch (error) {
+        throw new Error(
+          `官方任务配置校验失败（版本 ${version}）：${error.message}`,
+        );
+      }
     })();
     configsByVersion.set(version, loading);
     loading.catch(() => {

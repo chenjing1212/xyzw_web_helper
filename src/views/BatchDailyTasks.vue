@@ -6332,11 +6332,17 @@ const startBatch = async () => {
   if (shouldStop.value)
     message.info("批量任务已停止，再次开始将按服务器任务列表补差");
   else if (
-    selectedTokens.value.some((id) =>
-      ["failed", "pending", "stopped"].includes(tokenStatus.value[id]),
-    )
+    selectedTokens.value.some((id) => tokenStatus.value[id] === "failed")
+  )
+    message.error("部分账号执行失败，请查看日志中的具体原因");
+  else if (
+    selectedTokens.value.some((id) => tokenStatus.value[id] === "pending")
   )
     message.warning("本轮结束，仍有未完成任务，可再次开始继续");
+  else if (
+    selectedTokens.value.some((id) => tokenStatus.value[id] === "stopped")
+  )
+    message.warning("部分账号任务已停止，可再次开始继续");
   else message.success("批量任务执行结束");
 };
 

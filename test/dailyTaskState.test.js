@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   getClaimablePointRewards,
+  getDailyTaskConfigUrl,
   getDailyTaskStates,
   loadDailyTaskConfig,
   validateDailyTaskConfig,
@@ -84,6 +85,16 @@ test("invalid or duplicate configuration stops execution", () => {
   assert.throws(() => validateDailyTaskConfig({}), /配置无效/);
 });
 
+test("config URL is same-origin and rejects unsafe versions", () => {
+  assert.equal(
+    getDailyTaskConfigUrl("release-20261123"),
+    "/api/game-config/data/release-20261123/config.json",
+  );
+  for (const version of ["../invalid", "with/slash", "", null]) {
+    assert.throws(() => getDailyTaskConfigUrl(version), /有效/);
+  }
+});
+
 test("point reward selection uses server points and claimed map for daily and weekly rewards", () => {
   const config = validateDailyTaskConfig(officialConfig());
   const daily = {
@@ -114,14 +125,16 @@ test("point reward selection uses server points and claimed map for daily and we
 test("config version is verified each run while immutable configuration requests are merged", async () => {
   let reads = 0;
   let versions = 0;
+  let requestedUrl;
   const store = {
     async sendMessageWithPromise() {
       versions++;
       return { dataBundleVer: "test-config-merge" };
     },
   };
-  const fetchConfig = async () => {
+  const fetchConfig = async (url) => {
     reads++;
+    requestedUrl = url;
     return { ok: true, json: async () => officialConfig() };
   };
   const [a, b] = await Promise.all([
@@ -131,6 +144,10 @@ test("config version is verified each run while immutable configuration requests
   assert.equal(a, b);
   assert.equal(reads, 1);
   assert.equal(versions, 2);
+  assert.equal(
+    requestedUrl,
+    "/api/game-config/data/test-config-merge/config.json",
+  );
 });
 
 test("failed config reads can be retried and unsafe versions are rejected", async () => {
@@ -142,6 +159,7 @@ test("failed config reads can be retried and unsafe versions are rejected", asyn
   };
   const fetchConfig = async () => ({
     ok: ++attempt > 1,
+    status: 503,
     json: async () => officialConfig(),
   });
   await assert.rejects(
@@ -161,6 +179,48 @@ test("failed config reads can be retried and unsafe versions are rejected", asyn
       fetchConfig,
     ),
     /有效/,
+  );
+});
+
+test("config failures identify HTTP, network, JSON, and validation stages", async () => {
+  const store = (version) => ({
+    sendMessageWithPromise: async () => ({ dataBundleVer: version }),
+  });
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-http-403"), "a", async () => ({
+      ok: false,
+      status: 403,
+    })),
+    /HTTP 403，上游拒绝访问/,
+  );
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-http-404"), "a", async () => ({
+      ok: false,
+      status: 404,
+    })),
+    /HTTP 404，该版本配置不存在/,
+  );
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-network"), "a", async () => {
+      throw new Error("offline");
+    }),
+    /网络请求失败.*offline/,
+  );
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-json"), "a", async () => ({
+      ok: true,
+      json: async () => {
+        throw new Error("bad json");
+      },
+    })),
+    /JSON 解析失败.*bad json/,
+  );
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-validation"), "a", async () => ({
+      ok: true,
+      json: async () => ({}),
+    })),
+    /配置校验失败.*配置无效/,
   );
 });
 

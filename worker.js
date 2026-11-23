@@ -1,6 +1,7 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const gameConfigPrefix = "/api/game-config";
 
     // CORS headers
     const corsHeaders = {
@@ -13,6 +14,81 @@ export default {
     // Handle OPTIONS request
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
+    }
+
+    if (
+      url.pathname === gameConfigPrefix ||
+      url.pathname.startsWith(`${gameConfigPrefix}/`)
+    ) {
+      if (!["GET", "HEAD"].includes(request.method)) {
+        return new Response(
+          JSON.stringify({ error: "Only GET and HEAD are allowed" }),
+          {
+            status: 405,
+            headers: {
+              ...corsHeaders,
+              Allow: "GET, HEAD",
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+      }
+
+      const upstreamPath = url.pathname.slice(gameConfigPrefix.length);
+      if (!/^\/data\/[\w-]+\/config\.json$/.test(upstreamPath)) {
+        return new Response(JSON.stringify({ error: "Invalid config path" }), {
+          status: 404,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        });
+      }
+
+      const targetUrl = new URL(
+        upstreamPath,
+        "https://xxz-xyzw-res.hortorgames.com",
+      );
+      targetUrl.search = url.search;
+      try {
+        const response = await fetch(targetUrl, {
+          method: request.method,
+          headers: { Accept: "application/json" },
+          redirect: "follow",
+        });
+        const headers = new Headers(response.headers);
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+          headers.set(key, value);
+        });
+        if (!headers.has("Content-Type")) {
+          headers.set("Content-Type", "application/json; charset=utf-8");
+        }
+        headers.set(
+          "Cache-Control",
+          response.ok ? "public, max-age=300, s-maxage=3600" : "no-store",
+        );
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
+      } catch (error) {
+        return new Response(
+          JSON.stringify({
+            error: `Game config upstream failed: ${error.message}`,
+          }),
+          {
+            status: 502,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+      }
     }
 
     // Proxy configuration

@@ -138,6 +138,16 @@ export default defineConfig(async () => {
       open: true,
       host: true,
       proxy: {
+        // 官方游戏配置通过同源路径读取，保持与 Cloudflare Worker 一致。
+        "/api/game-config": {
+          target: "https://xxz-xyzw-res.hortorgames.com",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/game-config/, ""),
+          secure: true,
+          headers: {
+            Accept: "application/json",
+          },
+        },
         // 手机号验证码接口需要以 ucenter-app-server Host 路由。
         "/api/hortor-ucenter": {
           target: "https://comb-platform.hortorgames.com",
