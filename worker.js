@@ -36,7 +36,14 @@ export default {
       }
 
       const upstreamPath = url.pathname.slice(gameConfigPrefix.length);
-      if (!/^\/data\/[\w-]+\/config\.json$/.test(upstreamPath)) {
+      const isBundleManifest = /^\/remote\/config\/config\.[\w-]+\.json$/.test(
+        upstreamPath,
+      );
+      const isConfigBinary =
+        /^\/remote\/config\/native\/[0-9a-f]{2}\/[0-9a-f-]{36}\.[0-9a-f]+\.bin$/i.test(
+          upstreamPath,
+        );
+      if (!isBundleManifest && !isConfigBinary) {
         return new Response(JSON.stringify({ error: "Invalid config path" }), {
           status: 404,
           headers: {
@@ -55,16 +62,23 @@ export default {
       try {
         const response = await fetch(targetUrl, {
           method: request.method,
-          headers: { Accept: "application/json" },
+          headers: {
+            Accept: isBundleManifest
+              ? "application/json"
+              : "application/octet-stream",
+          },
           redirect: "follow",
         });
         const headers = new Headers(response.headers);
         Object.entries(corsHeaders).forEach(([key, value]) => {
           headers.set(key, value);
         });
-        if (!headers.has("Content-Type")) {
-          headers.set("Content-Type", "application/json; charset=utf-8");
-        }
+        headers.set(
+          "Content-Type",
+          isBundleManifest
+            ? "application/json; charset=utf-8"
+            : "application/octet-stream",
+        );
         headers.set(
           "Cache-Control",
           response.ok ? "public, max-age=300, s-maxage=3600" : "no-store",

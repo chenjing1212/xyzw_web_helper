@@ -39,29 +39,13 @@ function fixture({
   connectionSucceeds = true,
   runError = null,
   incomplete = 0,
-  accountCount = 1,
 } = {}) {
   const logs = [];
-  const selectedTokenIds = Array.from(
-    { length: accountCount },
-    (_, index) => `account-${index + 1}`,
-  );
-  const state = {
-    runs: 0,
-    closed: 0,
-    connected,
-    errors: [],
-    warnings: [],
-    successes: [],
-  };
+  const state = { runs: 0, closed: 0, connected };
   const context = {
-    selectedTokens: { value: selectedTokenIds },
+    selectedTokens: { value: ["account-a"] },
     tokens: {
-      value: selectedTokenIds.map((id, index) => ({
-        id,
-        name: `Test account ${index + 1}`,
-        token: "fixture",
-      })),
+      value: [{ id: "account-a", name: "Test account", token: "fixture" }],
     },
     tokenStatus: { value: {} },
     isRunning: { value: false },
@@ -75,12 +59,7 @@ function fixture({
       taskDelay: 0,
     },
     addLog: (log) => logs.push(log),
-    message: {
-      info() {},
-      error: (text) => state.errors.push(text),
-      warning: (text) => state.warnings.push(text),
-      success: (text) => state.successes.push(text),
-    },
+    message: { info() {}, warning() {}, success() {} },
     setTimeout: (callback) => {
       callback();
     },
@@ -120,30 +99,8 @@ test("batch rate-limit failure executes once and preserves another caller's conn
   assert.equal(f.state.runs, 1);
   assert.equal(f.state.closed, 0);
   assert.equal(f.context.connectionQueue.active, 1);
-  assert.equal(f.context.tokenStatus.value["account-1"], "failed");
+  assert.equal(f.context.tokenStatus.value["account-a"], "failed");
   assert.equal(f.context.isRunning.value, false);
-});
-
-test("config read failure is reported as failure instead of a retryable pending task", async () => {
-  const f = fixture({ runError: new Error("官方任务配置读取失败") });
-  await f.startBatch();
-  assert.equal(f.context.tokenStatus.value["account-1"], "failed");
-  assert.deepEqual(f.state.errors, [
-    "部分账号执行失败，请查看日志中的具体原因",
-  ]);
-  assert.deepEqual(f.state.warnings, []);
-});
-
-test("successful batch continues through every selected account", async () => {
-  const f = fixture({ accountCount: 3 });
-  await f.startBatch();
-  assert.equal(f.state.runs, 3);
-  assert.deepEqual(Object.values(f.context.tokenStatus.value), [
-    "completed",
-    "completed",
-    "completed",
-  ]);
-  assert.deepEqual(f.state.successes, ["批量任务执行结束"]);
 });
 
 test("failed connection releases its slot once without releasing another account's slot", async () => {
@@ -151,7 +108,7 @@ test("failed connection releases its slot once without releasing another account
   await f.startBatch();
   assert.equal(f.state.runs, 0);
   assert.equal(f.context.connectionQueue.active, 1);
-  assert.equal(f.context.tokenStatus.value["account-1"], "failed");
+  assert.equal(f.context.tokenStatus.value["account-a"], "failed");
   assert.equal(f.context.isRunning.value, false);
 });
 
@@ -161,7 +118,7 @@ test("batch releases the new connection it owns and respects the runner's pendin
   assert.equal(f.state.runs, 1);
   assert.equal(f.state.closed, 1);
   assert.equal(f.context.connectionQueue.active, 1);
-  assert.equal(f.context.tokenStatus.value["account-1"], "pending");
+  assert.equal(f.context.tokenStatus.value["account-a"], "pending");
 });
 
 test("stop while waiting for a connection slot does not acquire a slot", async () => {

@@ -1,3 +1,5 @@
+import { bon } from "./bonProtocol.js";
+
 const configsByVersion = new Map();
 const activeTokenRuns = new Set();
 
@@ -12,7 +14,67 @@ const HANG_UP_HELP_SLOTS = 4;
 export function getDailyTaskConfigUrl(version) {
   if (typeof version !== "string" || !/^[\w-]+$/.test(version))
     throw new Error("服务器未提供有效的任务配置版本");
-  return `/api/game-config/data/${version}/config.json`;
+  return `/api/game-config/remote/config/config.${version}.json`;
+}
+
+const BASE64_VALUES = (() => {
+  const values = new Map();
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    .split("")
+    .forEach((character, index) => values.set(character, index));
+  return values;
+})();
+
+/** Decode the compact UUID format used by Cocos bundle manifests. */
+export function decodeCocosUuid(uuid) {
+  if (typeof uuid !== "string") throw new Error("配置包资源UUID无效");
+  if (uuid.length !== 22) {
+    if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(uuid)) return uuid.toLowerCase();
+    throw new Error("配置包资源UUID无效");
+  }
+  const result = Array.from({ length: 36 }, () => "");
+  for (const index of [8, 13, 18, 23]) result[index] = "-";
+  const positions = result
+    .map((value, index) => (value === "-" ? null : index))
+    .filter((index) => index !== null);
+  result[0] = uuid[0];
+  result[1] = uuid[1];
+  const hex = "0123456789abcdef";
+  let position = 2;
+  for (let index = 2; index < 22; index += 2) {
+    const high = BASE64_VALUES.get(uuid[index]);
+    const low = BASE64_VALUES.get(uuid[index + 1]);
+    if (high === undefined || low === undefined)
+      throw new Error("配置包资源UUID无效");
+    result[positions[position++]] = hex[high >> 2];
+    result[positions[position++]] = hex[((high & 3) << 2) | (low >> 4)];
+    result[positions[position++]] = hex[low & 15];
+  }
+  return result.join("");
+}
+
+/** Resolve configc's immutable native asset from an official Cocos manifest. */
+export function getDailyTaskConfigBinaryUrl(manifest) {
+  const entry = Object.entries(manifest?.paths ?? {}).find(
+    ([, path]) => Array.isArray(path) && path[0] === "configc",
+  );
+  if (!entry) throw new Error("配置包清单中未找到configc资源");
+  const assetIndex = Number(entry[0]);
+  const compactUuid = manifest?.uuids?.[assetIndex];
+  const nativeVersions = manifest?.versions?.native;
+  if (!Number.isInteger(assetIndex) || !Array.isArray(nativeVersions))
+    throw new Error("配置包清单结构无效");
+  let assetVersion;
+  for (let index = 0; index < nativeVersions.length; index += 2) {
+    if (nativeVersions[index] === assetIndex) {
+      assetVersion = nativeVersions[index + 1];
+      break;
+    }
+  }
+  if (typeof assetVersion !== "string" || !/^[0-9a-f]+$/i.test(assetVersion))
+    throw new Error("配置包清单缺少configc版本");
+  const uuid = decodeCocosUuid(compactUuid);
+  return `/api/game-config/remote/config/native/${uuid.slice(0, 2)}/${uuid}.${assetVersion}.bin`;
 }
 
 /**
@@ -183,9 +245,9 @@ export async function loadDailyTaskConfig(
   const configUrl = getDailyTaskConfigUrl(version);
   if (!configsByVersion.has(version)) {
     const loading = (async () => {
-      let configResponse;
+      let manifestResponse;
       try {
-        configResponse = await fetchConfig(configUrl, {
+        manifestResponse = await fetchConfig(configUrl, {
           signal: AbortSignal.timeout(30000),
         });
       } catch (error) {
@@ -193,9 +255,9 @@ export async function loadDailyTaskConfig(
           `官方任务配置网络请求失败（版本 ${version}）：${error.message}`,
         );
       }
-      if (!configResponse.ok) {
-        const status = Number.isInteger(configResponse.status)
-          ? configResponse.status
+      if (!manifestResponse.ok) {
+        const status = Number.isInteger(manifestResponse.status)
+          ? manifestResponse.status
           : "未知";
         const reason =
           status === 403
@@ -207,12 +269,39 @@ export async function loadDailyTaskConfig(
           `官方任务配置读取失败（版本 ${version}，HTTP ${status}，${reason}）`,
         );
       }
-      let config;
+      let binaryUrl;
       try {
-        config = await configResponse.json();
+        const manifest = await manifestResponse.json();
+        binaryUrl = getDailyTaskConfigBinaryUrl(manifest);
       } catch (error) {
         throw new Error(
-          `官方任务配置 JSON 解析失败（版本 ${version}）：${error.message}`,
+          `官方任务配置包清单解析失败（版本 ${version}）：${error.message}`,
+        );
+      }
+      let binaryResponse;
+      try {
+        binaryResponse = await fetchConfig(binaryUrl, {
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (error) {
+        throw new Error(
+          `官方任务配置二进制网络请求失败（版本 ${version}）：${error.message}`,
+        );
+      }
+      if (!binaryResponse.ok) {
+        const status = Number.isInteger(binaryResponse.status)
+          ? binaryResponse.status
+          : "未知";
+        throw new Error(
+          `官方任务配置二进制读取失败（版本 ${version}，HTTP ${status}）`,
+        );
+      }
+      let config;
+      try {
+        config = bon.decode(new Uint8Array(await binaryResponse.arrayBuffer()));
+      } catch (error) {
+        throw new Error(
+          `官方任务配置BON解码失败（版本 ${version}）：${error.message}`,
         );
       }
       try {

@@ -1,12 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { bon } from "../src/utils/bonProtocol.js";
 import {
+  decodeCocosUuid,
   getClaimablePointRewards,
+  getDailyTaskConfigBinaryUrl,
   getDailyTaskConfigUrl,
   getDailyTaskStates,
   loadDailyTaskConfig,
   validateDailyTaskConfig,
 } from "../src/utils/dailyTaskState.js";
+
+const CONFIG_UUID = "ffrEZCeQdEDaF8CLPFWVY0";
+const DECODED_CONFIG_UUID = "ffac4642-7907-440d-a17c-08b3c5595634";
+
+function bundleManifest() {
+  return {
+    paths: { 5: ["configc", 1] },
+    uuids: [null, null, null, null, null, CONFIG_UUID],
+    versions: { native: [5, "17431"] },
+  };
+}
+
+function configFetch(config = officialConfig()) {
+  return async (url) => {
+    if (url.includes("/config."))
+      return { ok: true, json: async () => bundleManifest() };
+    const bytes = bon.encode(config);
+    return {
+      ok: true,
+      arrayBuffer: async () =>
+        bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ),
+    };
+  };
+}
 
 function officialConfig() {
   return {
@@ -88,11 +118,23 @@ test("invalid or duplicate configuration stops execution", () => {
 test("config URL is same-origin and rejects unsafe versions", () => {
   assert.equal(
     getDailyTaskConfigUrl("release-20261123"),
-    "/api/game-config/data/release-20261123/config.json",
+    "/api/game-config/remote/config/config.release-20261123.json",
   );
   for (const version of ["../invalid", "with/slash", "", null]) {
     assert.throws(() => getDailyTaskConfigUrl(version), /有效/);
   }
+});
+
+test("Cocos bundle manifest resolves the immutable configc binary", () => {
+  assert.equal(decodeCocosUuid(CONFIG_UUID), DECODED_CONFIG_UUID);
+  assert.equal(
+    getDailyTaskConfigBinaryUrl(bundleManifest()),
+    `/api/game-config/remote/config/native/ff/${DECODED_CONFIG_UUID}.17431.bin`,
+  );
+  assert.throws(
+    () => getDailyTaskConfigBinaryUrl({ paths: {}, uuids: [] }),
+    /configc/,
+  );
 });
 
 test("point reward selection uses server points and claimed map for daily and weekly rewards", () => {
@@ -125,7 +167,7 @@ test("point reward selection uses server points and claimed map for daily and we
 test("config version is verified each run while immutable configuration requests are merged", async () => {
   let reads = 0;
   let versions = 0;
-  let requestedUrl;
+  const requestedUrls = [];
   const store = {
     async sendMessageWithPromise() {
       versions++;
@@ -134,20 +176,20 @@ test("config version is verified each run while immutable configuration requests
   };
   const fetchConfig = async (url) => {
     reads++;
-    requestedUrl = url;
-    return { ok: true, json: async () => officialConfig() };
+    requestedUrls.push(url);
+    return configFetch()(url);
   };
   const [a, b] = await Promise.all([
     loadDailyTaskConfig(store, "a", fetchConfig),
     loadDailyTaskConfig(store, "b", fetchConfig),
   ]);
   assert.equal(a, b);
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
   assert.equal(versions, 2);
-  assert.equal(
-    requestedUrl,
-    "/api/game-config/data/test-config-merge/config.json",
-  );
+  assert.deepEqual(requestedUrls, [
+    "/api/game-config/remote/config/config.test-config-merge.json",
+    `/api/game-config/remote/config/native/ff/${DECODED_CONFIG_UUID}.17431.bin`,
+  ]);
 });
 
 test("failed config reads can be retried and unsafe versions are rejected", async () => {
@@ -157,17 +199,18 @@ test("failed config reads can be retried and unsafe versions are rejected", asyn
       return { dataBundleVer: "test-config-retry" };
     },
   };
-  const fetchConfig = async () => ({
-    ok: ++attempt > 1,
-    status: 503,
-    json: async () => officialConfig(),
-  });
+  const successfulFetch = configFetch();
+  const fetchConfig = async (url) => {
+    attempt++;
+    if (attempt === 1) return { ok: false, status: 503 };
+    return successfulFetch(url);
+  };
   await assert.rejects(
     loadDailyTaskConfig(store, "a", fetchConfig),
     /读取失败/,
   );
   await loadDailyTaskConfig(store, "a", fetchConfig);
-  assert.equal(attempt, 2);
+  assert.equal(attempt, 3);
   await assert.rejects(
     loadDailyTaskConfig(
       {
@@ -213,14 +256,18 @@ test("config failures identify HTTP, network, JSON, and validation stages", asyn
         throw new Error("bad json");
       },
     })),
-    /JSON 解析失败.*bad json/,
+    /清单解析失败.*bad json/,
   );
   await assert.rejects(
-    loadDailyTaskConfig(store("stage-validation"), "a", async () => ({
-      ok: true,
-      json: async () => ({}),
-    })),
+    loadDailyTaskConfig(store("stage-validation"), "a", configFetch({})),
     /配置校验失败.*配置无效/,
+  );
+  const validFetch = configFetch();
+  await assert.rejects(
+    loadDailyTaskConfig(store("stage-binary-404"), "a", async (url) =>
+      url.includes("/config.") ? validFetch(url) : { ok: false, status: 404 },
+    ),
+    /二进制读取失败.*HTTP 404/,
   );
 });
 
@@ -242,14 +289,15 @@ test("an evicted failed config request cannot remove a newer cached request for 
   const store = {
     sendMessageWithPromise: async (id) => ({ dataBundleVer: id }),
   };
+  const successfulFetch = configFetch();
   const fetchConfig = async (url) => {
-    if (url.includes("cache-race-a") && ++readsA === 1) {
+    if (url.includes("config.cache-race-a") && ++readsA === 1) {
       entered();
       return new Promise((resolve, reject) => {
         rejectFirst = reject;
       });
     }
-    return { ok: true, json: async () => officialConfig() };
+    return successfulFetch(url);
   };
   const first = loadDailyTaskConfig(store, "cache-race-a", fetchConfig);
   const rejected = assert.rejects(first, /first request failed/);
